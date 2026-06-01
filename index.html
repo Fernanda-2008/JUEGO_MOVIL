@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Memorama de Frutas y Verduras</title>
+<title>Memorama de Alimentos</title>
 
 <style>
 *{
@@ -14,41 +14,51 @@ font-family:'Segoe UI',sans-serif;
 }
 
 body{
-background:linear-gradient(135deg,#7ed957,#f9f871);
 min-height:100vh;
 display:flex;
 justify-content:center;
 align-items:center;
-padding:20px;
+background:linear-gradient(135deg,#8BC34A,#FFEB3B);
+padding:15px;
 }
 
 .container{
 width:100%;
-max-width:500px;
+max-width:600px;
 background:white;
 border-radius:25px;
 padding:20px;
-box-shadow:0 10px 30px rgba(0,0,0,.2);
-text-align:center;
+box-shadow:0 10px 25px rgba(0,0,0,.2);
 }
 
 h1{
-color:#2e7d32;
+text-align:center;
+color:#2E7D32;
 margin-bottom:10px;
 }
 
-p{
+.subtitle{
+text-align:center;
+color:#666;
 margin-bottom:15px;
-color:#555;
-font-weight:bold;
 }
 
 .stats{
 display:flex;
 justify-content:space-between;
+background:#f5f5f5;
+padding:12px;
+border-radius:15px;
 margin-bottom:15px;
 font-weight:bold;
-color:#2e7d32;
+color:#2E7D32;
+}
+
+.message{
+text-align:center;
+font-weight:bold;
+margin-bottom:15px;
+color:#E65100;
 }
 
 .game{
@@ -58,60 +68,85 @@ gap:10px;
 }
 
 .card{
-aspect-ratio:1;
-background:#43a047;
+height:90px;
+position:relative;
+cursor:pointer;
+perspective:1000px;
+}
+
+.card-inner{
+width:100%;
+height:100%;
+position:relative;
+transition:transform .5s;
+transform-style:preserve-3d;
+}
+
+.card.flip .card-inner{
+transform:rotateY(180deg);
+}
+
+.front,
+.back{
+position:absolute;
+width:100%;
+height:100%;
 border-radius:15px;
 display:flex;
 justify-content:center;
 align-items:center;
-font-size:35px;
-cursor:pointer;
-transition:.4s;
-transform-style:preserve-3d;
-position:relative;
+backface-visibility:hidden;
 }
 
-.card.flip{
-background:#fff8e1;
+.front{
+background:linear-gradient(135deg,#43A047,#2E7D32);
+color:white;
+font-size:30px;
+}
+
+.back{
+background:#FFFDE7;
 transform:rotateY(180deg);
+font-size:40px;
+border:3px solid #FFD54F;
 }
 
-.card.matched{
-background:#81c784;
-cursor:default;
-}
-
-.card span{
-transform:rotateY(180deg);
+.matched .back{
+background:#C8E6C9;
 }
 
 button{
-margin-top:20px;
-padding:12px 20px;
+width:100%;
+margin-top:15px;
+padding:14px;
 border:none;
-background:#ff9800;
+border-radius:15px;
+background:#FF9800;
 color:white;
 font-size:16px;
-border-radius:12px;
-cursor:pointer;
 font-weight:bold;
-transition:.3s;
+cursor:pointer;
 }
 
 button:hover{
-background:#f57c00;
+background:#F57C00;
 }
 
 .win{
 margin-top:15px;
-font-size:20px;
+text-align:center;
+font-size:22px;
 font-weight:bold;
-color:#2e7d32;
+color:#2E7D32;
 }
 
-@media(max-width:500px){
+@media(max-width:480px){
 .card{
-font-size:28px;
+height:75px;
+}
+
+.back{
+font-size:32px;
 }
 }
 </style>
@@ -121,18 +156,26 @@ font-size:28px;
 
 <div class="container">
 
-<h1>🍎 Memorama</h1>
+<h1>🍎 Memorama de Alimentos 🍰</h1>
 
-<p>Frutas y Verduras</p>
+<div class="subtitle">
+Memoriza las cartas antes de que se oculten
+</div>
 
 <div class="stats">
-<span>Movimientos: <span id="moves">0</span></span>
-<span>Pares: <span id="pairs">0</span>/8</span>
+<div>👆 Movimientos: <span id="moves">0</span></div>
+<div>⏱️ <span id="timer">0</span>s</div>
+</div>
+
+<div class="message" id="message">
+Memoriza las cartas...
 </div>
 
 <div class="game" id="game"></div>
 
-<button onclick="restartGame()">🔄 Reiniciar</button>
+<button onclick="restartGame()">
+🔄 Nueva Partida
+</button>
 
 <div class="win" id="win"></div>
 
@@ -144,20 +187,24 @@ const emojis = [
 "🍎","🍎",
 "🍌","🍌",
 "🍇","🍇",
-"🍓","🍓",
 "🥕","🥕",
 "🌽","🌽",
-"🥒","🥒",
-"🍅","🍅"
+"🍰","🍰",
+"🍩","🍩",
+"🧁","🧁",
+"☕","☕",
+"🥛","🥛"
 ];
 
-let firstCard=null;
-let secondCard=null;
-let lockBoard=false;
-let moves=0;
-let pairs=0;
+const game = document.getElementById("game");
 
-const game=document.getElementById("game");
+let firstCard = null;
+let secondCard = null;
+let lockBoard = false;
+let moves = 0;
+let matches = 0;
+let timer = 0;
+let interval;
 
 function shuffle(array){
 for(let i=array.length-1;i>0;i--){
@@ -171,15 +218,19 @@ function createBoard(){
 
 game.innerHTML="";
 
-shuffle(emojis).forEach(emoji=>{
+shuffle([...emojis]).forEach(emoji=>{
 
 const card=document.createElement("div");
-
-card.classList.add("card");
+card.className="card flip";
 
 card.dataset.emoji=emoji;
 
-card.innerHTML="<span>"+emoji+"</span>";
+card.innerHTML=`
+<div class="card-inner">
+<div class="front">❓</div>
+<div class="back">${emoji}</div>
+</div>
+`;
 
 card.addEventListener("click",flipCard);
 
@@ -187,15 +238,27 @@ game.appendChild(card);
 
 });
 
+setTimeout(()=>{
+
+document.querySelectorAll(".card").forEach(card=>{
+card.classList.remove("flip");
+});
+
+document.getElementById("message").textContent=
+"Encuentra todas las parejas";
+
+startTimer();
+
+},5000);
+
 }
 
 function flipCard(){
 
 if(lockBoard) return;
-
 if(this===firstCard) return;
-
 if(this.classList.contains("matched")) return;
+if(timer===0 && document.getElementById("message").textContent==="Memoriza las cartas...") return;
 
 this.classList.add("flip");
 
@@ -210,40 +273,29 @@ moves++;
 document.getElementById("moves").textContent=moves;
 
 checkMatch();
-
 }
 
 function checkMatch(){
 
-let match=
-firstCard.dataset.emoji===
-secondCard.dataset.emoji;
-
-match ? disableCards() : unflipCards();
-
-}
-
-function disableCards(){
+if(firstCard.dataset.emoji===secondCard.dataset.emoji){
 
 firstCard.classList.add("matched");
 secondCard.classList.add("matched");
 
-pairs++;
+matches++;
 
-document.getElementById("pairs").textContent=pairs;
+resetCards();
 
-resetBoard();
+if(matches===10){
 
-if(pairs===8){
+clearInterval(interval);
 
 document.getElementById("win").innerHTML=
-"🎉 ¡Felicidades! Has ganado 🎉";
+"🎉 ¡FELICIDADES! COMPLETASTE EL MEMORAMA 🎉";
 
 }
 
-}
-
-function unflipCards(){
+}else{
 
 lockBoard=true;
 
@@ -252,29 +304,47 @@ setTimeout(()=>{
 firstCard.classList.remove("flip");
 secondCard.classList.remove("flip");
 
-resetBoard();
+resetCards();
 
-},900);
+},800);
 
 }
 
-function resetBoard(){
+}
 
+function resetCards(){
 [firstCard,secondCard,lockBoard]=[null,null,false];
+}
+
+function startTimer(){
+
+clearInterval(interval);
+
+interval=setInterval(()=>{
+
+timer++;
+document.getElementById("timer").textContent=timer;
+
+},1000);
 
 }
 
 function restartGame(){
 
 moves=0;
-pairs=0;
+matches=0;
+timer=0;
 
-document.getElementById("moves").textContent=0;
-document.getElementById("pairs").textContent=0;
-
+document.getElementById("moves").textContent="0";
+document.getElementById("timer").textContent="0";
 document.getElementById("win").innerHTML="";
+document.getElementById("message").textContent="Memoriza las cartas...";
 
-resetBoard();
+clearInterval(interval);
+
+firstCard=null;
+secondCard=null;
+lockBoard=false;
 
 createBoard();
 
